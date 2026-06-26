@@ -1,7 +1,11 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import pickle
 import os
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn import svm
 
 # ─────────────────────────────────────────────
 # Page Configuration
@@ -237,13 +241,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Load Model & Scaler
+# Load or Auto-Train Model & Scaler
 # ─────────────────────────────────────────────
 @st.cache_resource
 def load_model():
     base = os.path.dirname(os.path.abspath(__file__))
-    model = pickle.load(open(os.path.join(base, 'diabetes_model.sav'), 'rb'))
-    scaler = pickle.load(open(os.path.join(base, 'scaler.sav'), 'rb'))
+    model_path  = os.path.join(base, 'diabetes_model.sav')
+    scaler_path = os.path.join(base, 'scaler.sav')
+
+    # Auto-train if model files are missing (e.g. on Streamlit Cloud)
+    if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+        csv_path = os.path.join(base, 'diabetes.csv')
+        df = pd.read_csv(csv_path)
+        X = df.drop('Outcome', axis=1)
+        Y = df['Outcome']
+        scaler = StandardScaler()
+        scaler.fit(X)
+        X_scaled = scaler.transform(X)
+        X_train, X_test, Y_train, Y_test = train_test_split(
+            X_scaled, Y, test_size=0.2, stratify=Y, random_state=2
+        )
+        model = svm.SVC(kernel='linear')
+        model.fit(X_train, Y_train)
+        pickle.dump(model,  open(model_path,  'wb'))
+        pickle.dump(scaler, open(scaler_path, 'wb'))
+
+    model  = pickle.load(open(model_path,  'rb'))
+    scaler = pickle.load(open(scaler_path, 'rb'))
     return model, scaler
 
 try:
